@@ -1,149 +1,183 @@
-import tkinter as tk
-from tkinter import ttk, messagebox
-import threading
+import sys
 import time
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
+                             QHBoxLayout, QLineEdit, QPushButton, QListWidget, 
+                             QLabel, QTextEdit, QDialog)
+from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtGui import QTextCursor
 
-# --- Theme Configuration ---
-BG_COLOR = "#0a0f0d"        # Deep dark background
-FG_COLOR = "#00ff41"        # Classic terminal neon green
-ACCENT_COLOR = "#ff007f"    # Cyberpunk magenta 
-FONT_MAIN = ("Consolas", 11)
-FONT_TITLE = ("Consolas", 16, "bold")
+# --- Theme Configuration (CSS) ---
+STYLESHEET = """
+/* Explicitly target main windows and dialogs to override Apple's Aqua theme */
+QMainWindow, QDialog, QWidget {
+    background-color: #0a0f0d;
+    color: #00ff41;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 14px;
+}
+QLabel#Title {
+    color: #ff007f;
+    font-size: 20px;
+    font-weight: bold;
+}
+QLineEdit {
+    background-color: #1a2621;
+    color: #00ff41;
+    border: 1px solid #ff007f;
+    padding: 8px;
+}
+QPushButton {
+    background-color: #0a0f0d;
+    color: #00ff41;
+    border: 1px solid #00ff41;
+    padding: 8px 15px;
+    font-weight: bold;
+}
+QPushButton:hover {
+    background-color: #00ff41;
+    color: #0a0f0d;
+}
+QPushButton#AddBtn {
+    color: #ff007f;
+    border: 1px solid #ff007f;
+}
+QPushButton#AddBtn:hover {
+    background-color: #ff007f;
+    color: #0a0f0d;
+}
+QListWidget, QTextEdit {
+    background-color: #050806;
+    border: 1px solid #333333;
+    padding: 5px;
+}
+"""
 
-class HackerScannerApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("NEON_SCAN // Project: Mirage")
-        self.root.geometry("500x450")
-        self.root.configure(bg=BG_COLOR)
-        self.targets = []
+class ScanWorker(QThread):
+    log_signal = pyqtSignal(str, bool)
+    finished_signal = pyqtSignal()
 
-        self.setup_ui()
+    def __init__(self, targets):
+        super().__init__()
+        self.targets = targets
 
-    def setup_ui(self):
-        # Title Label
-        title_lbl = tk.Label(self.root, text="[ SYSTEM_SCAN_INTERFACE ]", 
-                             bg=BG_COLOR, fg=ACCENT_COLOR, font=FONT_TITLE)
-        title_lbl.pack(pady=20)
-
-        # Target Entry Frame
-        entry_frame = tk.Frame(self.root, bg=BG_COLOR)
-        entry_frame.pack(fill=tk.X, padx=40, pady=5)
-
-        self.target_entry = tk.Entry(entry_frame, bg="#1a2621", fg=FG_COLOR, 
-                                     font=FONT_MAIN, insertbackground=FG_COLOR, relief=tk.FLAT)
-        self.target_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=5)
-
-        add_btn = tk.Button(entry_frame, text="ADD_TARGET", bg=ACCENT_COLOR, fg="#ffffff", 
-                            font=FONT_MAIN, relief=tk.FLAT, activebackground="#cc0066", 
-                            activeforeground="#ffffff", command=self.add_target)
-        add_btn.pack(side=tk.RIGHT, padx=(10, 0))
-
-        # Target Listbox
-        list_frame = tk.Frame(self.root, bg=BG_COLOR)
-        list_frame.pack(fill=tk.BOTH, expand=True, padx=40, pady=15)
-
-        self.target_listbox = tk.Listbox(list_frame, bg="#0d1411", fg=FG_COLOR, 
-                                         font=FONT_MAIN, relief=tk.FLAT, selectbackground=ACCENT_COLOR)
-        self.target_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        scrollbar = tk.Scrollbar(list_frame, bg=BG_COLOR)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.target_listbox.config(yscrollcommand=scrollbar.set)
-        scrollbar.config(command=self.target_listbox.yview)
-
-        # Scan Button
-        scan_btn = tk.Button(self.root, text="> INITIATE_SCAN_SEQUENCE <", bg=FG_COLOR, fg=BG_COLOR, 
-                             font=("Consolas", 12, "bold"), relief=tk.FLAT, 
-                             activebackground="#00cc33", activeforeground=BG_COLOR, 
-                             command=self.start_scan)
-        scan_btn.pack(fill=tk.X, padx=40, pady=25, ipady=8)
-
-    def add_target(self):
-        target = self.target_entry.get().strip()
-        if target:
-            if target not in self.targets:
-                self.targets.append(target)
-                self.target_listbox.insert(tk.END, f" [+] {target}")
-            self.target_entry.delete(0, tk.END)
-
-    def start_scan(self):
-        if not self.targets:
-            messagebox.showwarning("ERR_NO_TARGETS", "Target list empty. Provide an IP/URL.")
-            return
-
-        self.open_scan_modal()
-
-    def open_scan_modal(self):
-        # Create Modal Window
-        self.modal = tk.Toplevel(self.root)
-        self.modal.title("SCAN_EXECUTION_LOG")
-        self.modal.geometry("600x400")
-        self.modal.configure(bg=BG_COLOR)
-        self.modal.transient(self.root) 
-        self.modal.grab_set() 
-
-        # Console Text Area
-        self.console_text = tk.Text(self.modal, bg="#050806", fg=FG_COLOR, 
-                                    font=FONT_MAIN, relief=tk.FLAT, state=tk.DISABLED)
-        self.console_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        # Run scan in a background thread to prevent GUI freezing
-        scan_thread = threading.Thread(target=self.execute_scan, daemon=True)
-        scan_thread.start()
-
-    def log_to_console(self, message, is_accent=False):
-        """Helper to append text to the modal console."""
-        self.console_text.config(state=tk.NORMAL)
-        
-        # Add tags for colors if accent is true
-        if is_accent:
-            self.console_text.insert(tk.END, message + "\n", "accent")
-            self.console_text.tag_config("accent", foreground=ACCENT_COLOR)
-        else:
-            self.console_text.insert(tk.END, message + "\n")
-            
-        self.console_text.see(tk.END)
-        self.console_text.config(state=tk.DISABLED)
-
-    def execute_scan(self):
-        """
-        MOCK SCAN FUNCTION: 
-        Replaces actual subprocess calls with time.sleep() for safety and demonstration.
-        """
-        self.log_to_console("[SYSTEM] Booting scan protocols...", is_accent=True)
+    def run(self):
+        self.log_signal.emit("[SYSTEM] Booting scan protocols...", True)
         time.sleep(1)
 
         for target in self.targets:
-            self.log_to_console(f"\n{'='*40}")
-            self.log_to_console(f"[*] TARGET LOCK: {target}", is_accent=True)
-            self.log_to_console(f"{'='*40}")
+            self.log_signal.emit(f"\n{'='*40}", False)
+            self.log_signal.emit(f"[*] TARGET LOCK: {target}", True)
+            self.log_signal.emit(f"{'='*40}", False)
             time.sleep(1)
 
-            # --- SUBFINDER MOCK ---
-            self.log_to_console(f"[>] Executing subfinder on {target}...")
-            # Example of how you would implement this:
-            # subprocess.run(["subfinder", "-d", target, "-o", f"{target}_subs.txt"])
+            self.log_signal.emit(f"[>] Executing subfinder on {target}...", False)
             time.sleep(1.5)
-            self.log_to_console(f"[+] Subfinder complete. 3 subdomains archived to local databank.")
+            self.log_signal.emit("[+] Subfinder complete. 3 subdomains archived.", False)
 
-            # --- NMAP MOCK ---
-            self.log_to_console(f"[>] Initiating NMAP sequence (Ports, TLS, Ciphers, Vuln-Scripts)...")
-            # Example of how you would implement this:
-            # subprocess.run(["nmap", "-sV", "-sU", "--script", "vuln,ssl-enum-ciphers", target])
+            self.log_signal.emit("[>] Initiating NMAP sequence (Ports, TLS, Vuln)...", False)
             time.sleep(2)
-            self.log_to_console(f"    - SYN Stealth scan complete.")
+            self.log_signal.emit("    - SYN Stealth scan complete.", False)
             time.sleep(1)
-            self.log_to_console(f"    - UDP heuristic checks complete.")
+            self.log_signal.emit("    - UDP heuristic checks complete.", False)
             time.sleep(1.5)
-            self.log_to_console(f"    - Script engine evaluation (vuln, tls) finished.")
+            self.log_signal.emit("    - Script engine evaluation finished.", False)
             
-            self.log_to_console(f"[+] NMAP scan parameters saved to matrix.", is_accent=True)
+            self.log_signal.emit("[+] NMAP scan parameters saved to matrix.", True)
             time.sleep(0.5)
 
-        self.log_to_console("\n[!] ALL_TASKS_COMPLETE. Disconnecting...", is_accent=True)
+        self.log_signal.emit("\n[!] ALL_TASKS_COMPLETE. Disconnecting...", True)
+        self.finished_signal.emit()
+
+
+class ScanModal(QDialog):
+    def __init__(self, targets, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("SCAN_EXECUTION_LOG")
+        self.resize(650, 450)
+        self.targets = targets
+
+        layout = QVBoxLayout(self)
+        
+        self.console = QTextEdit()
+        self.console.setReadOnly(True)
+        layout.addWidget(self.console)
+
+        self.worker = ScanWorker(self.targets)
+        self.worker.log_signal.connect(self.append_log)
+        self.worker.start()
+
+    def append_log(self, text, is_accent):
+        self.console.moveCursor(QTextCursor.MoveOperation.End)
+        if is_accent:
+            self.console.insertHtml(f'<span style="color:#ff007f;">{text}</span><br>')
+        else:
+            self.console.insertHtml(f'<span style="color:#00ff41;">{text}</span><br>')
+        self.console.moveCursor(QTextCursor.MoveOperation.End)
+
+
+class HackerScannerApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("NEON_SCAN // Project: Mirage")
+        self.resize(550, 500)
+        
+        self.targets = []
+        self.setup_ui()
+
+    def setup_ui(self):
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(30, 30, 30, 30)
+
+        title_lbl = QLabel("[ SYSTEM_SCAN_INTERFACE ]")
+        title_lbl.setObjectName("Title")
+        main_layout.addWidget(title_lbl)
+
+        input_layout = QHBoxLayout()
+        self.target_entry = QLineEdit()
+        self.target_entry.setPlaceholderText("Enter Target IP/URL...")
+        self.target_entry.returnPressed.connect(self.add_target)
+        input_layout.addWidget(self.target_entry)
+
+        add_btn = QPushButton("ADD_TARGET")
+        add_btn.setObjectName("AddBtn")
+        add_btn.clicked.connect(self.add_target)
+        input_layout.addWidget(add_btn)
+        
+        main_layout.addLayout(input_layout)
+
+        self.target_listbox = QListWidget()
+        main_layout.addWidget(self.target_listbox)
+
+        scan_btn = QPushButton("> INITIATE_SCAN_SEQUENCE <")
+        scan_btn.clicked.connect(self.start_scan)
+        main_layout.addWidget(scan_btn)
+
+    def add_target(self):
+        target = self.target_entry.text().strip()
+        if target and target not in self.targets:
+            self.targets.append(target)
+            self.target_listbox.addItem(f" [+] {target}")
+            self.target_entry.clear()
+
+    def start_scan(self):
+        if not self.targets:
+            return
+            
+        self.modal = ScanModal(self.targets, self)
+        self.modal.exec()
+
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = HackerScannerApp(root)
-    root.mainloop()
+    app = QApplication(sys.argv)
+    
+    # [CRITICAL MAC FIX]: Force the cross-platform standard theme
+    app.setStyle("Fusion") 
+    
+    # Apply the stylesheet
+    app.setStyleSheet(STYLESHEET)
+    
+    window = HackerScannerApp()
+    window.show()
+    sys.exit(app.exec())
