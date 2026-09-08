@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QLabel, QTextEdit, QDialog)
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtGui import QTextCursor
+import subprocess
 
 # --- Theme Configuration (CSS) ---
 STYLESHEET = """
@@ -71,15 +72,15 @@ class ScanWorker(QThread):
             time.sleep(1)
 
             self.log_signal.emit(f"[>] Executing subfinder on {target}...", False)
-            time.sleep(1.5)
-            self.log_signal.emit("[+] Subfinder complete. 3 subdomains archived.", False)
+            self.subfinder(target)
 
             self.log_signal.emit("[>] Initiating NMAP sequence (Ports, TLS, Vuln)...", False)
-            time.sleep(2)
+            self.nmapTLS(target)
+
             self.log_signal.emit("    - SYN Stealth scan complete.", False)
             time.sleep(1)
             self.log_signal.emit("    - UDP heuristic checks complete.", False)
-            time.sleep(1.5)
+            self.nmapUDP(target)
             self.log_signal.emit("    - Script engine evaluation finished.", False)
             
             self.log_signal.emit("[+] NMAP scan parameters saved to matrix.", True)
@@ -87,7 +88,23 @@ class ScanWorker(QThread):
 
         self.log_signal.emit("\n[!] ALL_TASKS_COMPLETE. Disconnecting...", True)
         self.finished_signal.emit()
-
+    def nmapTLS(self, target):
+        self.log_signal.emit("\n[!] Checking target for weak ciphers and TLS", False)
+        result = subprocess.run(["nmap", "-p443", "--script", "ssl-enum-ciphers", target], capture_output=True, text=True)
+        self.log_signal.emit(result.stdout, True)
+    def nmapUDP(self, target):
+        self.log_signal.emit("\n[!] Checking target for UDP", False)
+        #result = subprocess.run(["nmap", "-sU", target], capture_output=True, text=True)
+        #self.log_signal.emit(result.stdout, True)
+    def subfinder(self, target):
+        self.log_signal.emit("\n[!] Checking target for subdomains", False)
+        result = subprocess.run(["subfinder", "-d", target], capture_output=True, text=True)
+        self.log_signal.emit(result.stdout, True)
+        self.log_signal.emit(result.stderr, True)
+    def directoryScan(self, target):
+        self.log_signal.emit("\n[!] Checking target directory", False)
+        result = subprocess.run(["nmap", "-p443", "--script", "ssl-enum-ciphers", target], capture_output=True, text=True)
+        self.log_signal.emit(result.stdout, True)
 
 class ScanModal(QDialog):
     def __init__(self, targets, parent=None):
