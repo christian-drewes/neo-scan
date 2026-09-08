@@ -6,13 +6,10 @@
 
 **NEON_SCAN** is a cross-platform, cyberpunk-themed GUI wrapper for offensive security and reconnaissance tools. Built with Python and PyQt6, it provides a sleek, non-blocking interface to run CLI tools like `subfinder` and `nmap` against multiple targets while streaming the results live to a built-in tactical console.
 
-By utilizing PyQt6, the application completely bypasses native OS UI restrictions (like macOS's Aqua engine), ensuring the high-contrast "Hacker/Anime" aesthetic renders flawlessly on Windows, macOS, and Linux.
-
 ---
 
 ## ⚡ Features
 
-* **Cyberpunk Aesthetic:** Deep dark backgrounds with neon green and magenta accents.
 * **Cross-Platform:** Looks and behaves exactly the same on Windows, macOS, and Linux.
 * **Multi-Target Queuing:** Add multiple domains or IP addresses to a target matrix before initiating the scan.
 * **Live Console Streaming:** Uses asynchronous background threading (`QThread` & `subprocess`) to stream real-time CLI tool output to the UI without freezing the application.
