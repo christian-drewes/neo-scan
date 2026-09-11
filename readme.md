@@ -1,10 +1,10 @@
-# NEON_SCAN // Project: Mirage 🌐
+# NEO_SCAN // Project: Mirage 🌐
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![PyQt6](https://img.shields.io/badge/PyQt6-Cross%20Platform-green.svg)
 ![License](https://img.shields.io/badge/License-MIT-magenta.svg)
 
-**NEON_SCAN** is a cross-platform, cyberpunk-themed GUI wrapper for offensive security and reconnaissance tools. Built with Python and PyQt6, it provides a sleek, non-blocking interface to run CLI tools like `subfinder` and `nmap` against multiple targets while streaming the results live to a built-in tactical console.
+**NEO_SCAN** is a cross-platform, cyberpunk-themed GUI wrapper for offensive security and reconnaissance tools. Built with Python and PyQt6, it provides a sleek, non-blocking interface to run CLI tools like `subfinder` and `nmap` against multiple targets while streaming the results live to a built-in tactical console.
 
 ---
 
@@ -41,5 +41,5 @@ Before running the application, you must have the underlying CLI tools installed
 
 1. **Clone the repository:**
    ```bash
-   git clone [https://github.com/yourusername/neon-scan.git](https://github.com/yourusername/neon-scan.git)
-   cd neon-scan
+   git clone [https://github.com/yourusername/neo-scan.git](https://github.com/yourusername/neo-scan.git)
+   cd neo-scan
