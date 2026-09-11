@@ -41,5 +41,5 @@ Before running the application, you must have the underlying CLI tools installed
 
 1. **Clone the repository:**
    ```bash
-   git clone [https://github.com/yourusername/neo-scan.git](https://github.com/yourusername/neo-scan.git)
+   git clone [https://github.com/christian-drewes/neo-scan.git](https://github.com/christian-drewes/neo-scan.git)
    cd neo-scan
