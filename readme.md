@@ -1,4 +1,4 @@
-# NEO_SCAN // Project: Mirage 🌐
+# NEO_SCAN
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![PyQt6](https://img.shields.io/badge/PyQt6-Cross%20Platform-green.svg)
