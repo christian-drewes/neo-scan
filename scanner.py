@@ -1,8 +1,8 @@
 import sys
 import time
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                             QHBoxLayout, QLineEdit, QPushButton, QListWidget, 
-                             QLabel, QTextEdit, QDialog)
+                             QHBoxLayout, QGridLayout, QLineEdit, QPushButton, 
+                             QListWidget, QLabel, QTextEdit, QDialog, QCheckBox)
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtGui import QTextCursor
 import subprocess
@@ -46,10 +46,39 @@ QPushButton#AddBtn:hover {
     background-color: #ff007f;
     color: #0a0f0d;
 }
+QPushButton#MenuBtn {
+    border: 1px dashed #333333;
+    color: #aaaaaa;
+    text-align: left;
+}
+QPushButton#MenuBtn:hover {
+    color: #00ff41;
+    border: 1px dashed #00ff41;
+    background-color: transparent;
+}
 QListWidget, QTextEdit {
     background-color: #050806;
     border: 1px solid #333333;
     padding: 5px;
+}
+/* Custom Checkbox Styling */
+QCheckBox {
+    color: #00ff41;
+    spacing: 8px;
+    font-weight: bold;
+}
+QCheckBox::indicator {
+    width: 14px;
+    height: 14px;
+    background-color: #0a0f0d;
+    border: 1px solid #00ff41;
+}
+QCheckBox::indicator:checked {
+    background-color: #00ff41;
+    border: 1px solid #00ff41;
+}
+QCheckBox::indicator:hover {
+    border: 1px solid #ff007f;
 }
 """
 
@@ -57,9 +86,10 @@ class ScanWorker(QThread):
     log_signal = pyqtSignal(str, bool)
     finished_signal = pyqtSignal()
 
-    def __init__(self, targets):
+    def __init__(self, targets, scan_config):
         super().__init__()
         self.targets = targets
+        self.scan_config = scan_config
 
     def run(self):
         self.log_signal.emit("[SYSTEM] Booting scan protocols...", True)
@@ -71,47 +101,68 @@ class ScanWorker(QThread):
             self.log_signal.emit(f"{'='*40}", False)
             time.sleep(1)
 
-            self.log_signal.emit(f"[>] Executing subfinder on {target}...", False)
-            self.subfinder(target)
+            # Check Config before running Subfinder
+            if self.scan_config["subfinder"]:
+                self.subfinder(target)
+            else:
+                self.log_signal.emit("[!] Skipping Subfinder...", False)
 
-            self.log_signal.emit("[>] Initiating NMAP sequence (Ports, TLS, Vuln)...", False)
-            self.nmapTLS(target)
+            # Check Config before running NMAP TLS
+            if self.scan_config["nmap_tls"]:
+                self.nmapTLS(target)
+            else:
+                self.log_signal.emit("[!] Skipping NMAP TLS...", False)
 
-            self.log_signal.emit("    - SYN Stealth scan complete.", False)
-            time.sleep(1)
-            self.log_signal.emit("    - UDP heuristic checks complete.", False)
-            self.nmapUDP(target)
-            self.log_signal.emit("    - Script engine evaluation finished.", False)
-            
-            self.log_signal.emit("[+] NMAP scan parameters saved to matrix.", True)
+            # Check Config before running NMAP UDP
+            if self.scan_config["nmap_udp"]:
+                self.nmapUDP(target)
+            else:
+                self.log_signal.emit("[!] Skipping NMAP UDP...", False)
+
+            # Check Config before running Directory Scan
+            if self.scan_config["dir_scan"]:
+                self.directoryScan(target)
+            else:
+                self.log_signal.emit("[!] Skipping Directory Scan...", False)
+
+            self.log_signal.emit("[+] Target sequence completed.", True)
             time.sleep(0.5)
 
         self.log_signal.emit("\n[!] ALL_TASKS_COMPLETE. Disconnecting...", True)
         self.finished_signal.emit()
+
     def nmapTLS(self, target):
         self.log_signal.emit("\n[!] Checking target for weak ciphers and TLS", False)
         result = subprocess.run(["nmap", "-p443", "--script", "ssl-enum-ciphers", target], capture_output=True, text=True)
         self.log_signal.emit(result.stdout, True)
+
     def nmapUDP(self, target):
         self.log_signal.emit("\n[!] Checking target for UDP", False)
-        #result = subprocess.run(["nmap", "-sU", target], capture_output=True, text=True)
-        #self.log_signal.emit(result.stdout, True)
+        # Uncomment when ready
+        # result = subprocess.run(["nmap", "-sU", target], capture_output=True, text=True)
+        # self.log_signal.emit(result.stdout, True)
+        self.log_signal.emit("    - UDP heuristic checks complete.", False)
+
     def subfinder(self, target):
         self.log_signal.emit("\n[!] Checking target for subdomains", False)
         result = subprocess.run(["subfinder", "-d", target], capture_output=True, text=True)
         self.log_signal.emit(result.stdout, True)
-        self.log_signal.emit(result.stderr, True)
+        if result.stderr:
+            self.log_signal.emit(result.stderr, True)
+
     def directoryScan(self, target):
         self.log_signal.emit("\n[!] Checking target directory", False)
+        # Note: You might want to change this command to a dirbuster/ffuf command later!
         result = subprocess.run(["nmap", "-p443", "--script", "ssl-enum-ciphers", target], capture_output=True, text=True)
         self.log_signal.emit(result.stdout, True)
 
 class ScanModal(QDialog):
-    def __init__(self, targets, parent=None):
+    def __init__(self, targets, scan_config, parent=None):
         super().__init__(parent)
         self.setWindowTitle("SCAN_EXECUTION_LOG")
         self.resize(650, 450)
         self.targets = targets
+        self.scan_config = scan_config
 
         layout = QVBoxLayout(self)
         
@@ -119,7 +170,7 @@ class ScanModal(QDialog):
         self.console.setReadOnly(True)
         layout.addWidget(self.console)
 
-        self.worker = ScanWorker(self.targets)
+        self.worker = ScanWorker(self.targets, self.scan_config)
         self.worker.log_signal.connect(self.append_log)
         self.worker.start()
 
@@ -136,7 +187,7 @@ class HackerScannerApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("NEON_SCAN // Project: Mirage")
-        self.resize(550, 500)
+        self.resize(550, 550)
         
         self.targets = []
         self.setup_ui()
@@ -151,6 +202,7 @@ class HackerScannerApp(QMainWindow):
         title_lbl.setObjectName("Title")
         main_layout.addWidget(title_lbl)
 
+        # Input Row
         input_layout = QHBoxLayout()
         self.target_entry = QLineEdit()
         self.target_entry.setPlaceholderText("Enter Target IP/URL...")
@@ -164,12 +216,55 @@ class HackerScannerApp(QMainWindow):
         
         main_layout.addLayout(input_layout)
 
+        # Toggle Options Button
+        self.menu_btn = QPushButton("[+] TOGGLE_SCAN_MODULES")
+        self.menu_btn.setObjectName("MenuBtn")
+        self.menu_btn.clicked.connect(self.toggle_options)
+        main_layout.addWidget(self.menu_btn)
+
+        # Hidden Options Panel
+        self.options_panel = QWidget()
+        options_layout = QGridLayout(self.options_panel)
+        options_layout.setContentsMargins(10, 5, 10, 15)
+
+        self.chk_subfinder = QCheckBox("Subfinder Enumeration")
+        self.chk_subfinder.setChecked(True) # Enabled by default
+        
+        self.chk_nmap_tls = QCheckBox("NMAP TLS / Ciphers")
+        self.chk_nmap_tls.setChecked(True)
+        
+        self.chk_nmap_udp = QCheckBox("NMAP UDP Scan")
+        self.chk_nmap_udp.setChecked(False) # Off by default (takes too long)
+        
+        self.chk_dir_scan = QCheckBox("Directory Brute Force")
+        self.chk_dir_scan.setChecked(False)
+
+        options_layout.addWidget(self.chk_subfinder, 0, 0)
+        options_layout.addWidget(self.chk_nmap_tls, 0, 1)
+        options_layout.addWidget(self.chk_nmap_udp, 1, 0)
+        options_layout.addWidget(self.chk_dir_scan, 1, 1)
+
+        self.options_panel.setVisible(False) # Hide the panel initially
+        main_layout.addWidget(self.options_panel)
+
+        # Target List
         self.target_listbox = QListWidget()
         main_layout.addWidget(self.target_listbox)
 
+        # Scan Button
         scan_btn = QPushButton("> INITIATE_SCAN_SEQUENCE <")
         scan_btn.clicked.connect(self.start_scan)
         main_layout.addWidget(scan_btn)
+
+    def toggle_options(self):
+        """Hides or reveals the scan config checkboxes."""
+        is_visible = self.options_panel.isVisible()
+        self.options_panel.setVisible(not is_visible)
+        
+        if is_visible:
+            self.menu_btn.setText("[+] TOGGLE_SCAN_MODULES")
+        else:
+            self.menu_btn.setText("[-] HIDE_SCAN_MODULES")
 
     def add_target(self):
         target = self.target_entry.text().strip()
@@ -182,14 +277,22 @@ class HackerScannerApp(QMainWindow):
         if not self.targets:
             return
             
-        self.modal = ScanModal(self.targets, self)
+        # Build configuration dictionary based on what is checked
+        scan_config = {
+            "subfinder": self.chk_subfinder.isChecked(),
+            "nmap_tls": self.chk_nmap_tls.isChecked(),
+            "nmap_udp": self.chk_nmap_udp.isChecked(),
+            "dir_scan": self.chk_dir_scan.isChecked()
+        }
+            
+        self.modal = ScanModal(self.targets, scan_config, self)
         self.modal.exec()
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     
-    # [CRITICAL MAC FIX]: Force the cross-platform standard theme
+    # Force the cross-platform standard theme
     app.setStyle("Fusion") 
     
     # Apply the stylesheet
